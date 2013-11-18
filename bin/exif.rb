@@ -1,3 +1,4 @@
+#!/usr/bin/env ruby
 require 'exiv2'
 require 'pp'
 require 'date'
