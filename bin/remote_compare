@@ -1,0 +1,106 @@
+#!/usr/bin/env ruby
+require 'optparse'
+
+class RemoteCompare
+  attr_accessor :difftool, :host1, :host2, :sudo, :command, :compare_file
+
+  def download
+    if self.compare_file
+      download_files
+    elsif self.command
+      download_command_output
+    else
+      raise "Unexpected error: no command or file to compare!"
+    end
+  end
+
+  ##
+  # returns an array of file1, file2 to compare
+  #
+  def download_files
+    threads = []
+    [host1, host2].each do |h|
+      threads << Thread.new(h) do |host|
+        `mkdir -p /tmp/#{host}$(dirname #{compare_file})`
+        `ssh -q -tt #{host} "#{sudo} cat #{compare_file}" > /tmp/#{host}#{compare_file}`
+      end
+    end
+    threads.map(&:join)
+    ["/tmp/#{host1}#{compare_file}", "/tmp/#{host2}#{compare_file}"]
+  end
+
+  ##
+  # returns an array of file1, file2 to compare
+  #
+  def download_command_output
+    file1, file2 = [host1, host2].map{|h| File.join("/tmp", "#{h}#{command}".gsub(/\W/,''))}
+    threads = []
+    threads << Thread.new{ File.open(file1, 'w'){|f| f.puts `ssh -q -tt #{host1} "#{command}"`} }
+    threads << Thread.new{ File.open(file2, 'w'){|f| f.puts `ssh -q -tt #{host2} "#{command}"`} }
+    threads.map(&:join)
+    [file1, file2]
+  end
+
+  def parse_options!
+    optparse=OptionParser.new do |opts|
+      opts.on("-a", "--host1 HOSTNAME", "first host") do |h|
+        self.host1 = h
+      end
+      opts.on("-b", "--host2 HOSTNAME", "first host") do |h|
+        self.host2 = h
+      end
+      opts.on("-c", "--command COMMAND", "compare output of command") do |c|
+        self.command = c
+      end
+      opts.on("-d", "--difftool TOOL", "use tool for diffing (defaults to DIFFTOOL env variable or just 'diff'") do |d|
+        self.difftool = d
+      end
+      opts.on("-f", "--file FILE", "Path to file to compare") do |f|
+        self.compare_file = f
+      end
+      opts.on("-s", "--sudo", "Use sudo (if you need it to read FILE)") do 
+        self.sudo = 'sudo'
+      end
+
+      opts.banner = <<-USAGE
+Usage: #{__FILE__} [-f FILE] [-c COMMAND]
+
+Compare FILE or output of COMMAND on both hosts.  Hosts can be specified on the command line using flags (-a, -b) or by using environment variables SERVER_A and SERVER_B.  The command line flags take precedence.  The script will use the DIFFTOOL environment variable for comparison, and fall back to `diff`. 
+
+Examples: 
+  remote_compare -c 'ls -1 /bin' -d opendiff          # Compare the output of ls command using opendiff
+  remote_compare -f /etc/hosts -a server1 -b server2  # Compare /etc/hosts from server1 and server2
+
+      USAGE
+
+      opts.on("-h","--help","Show this message") do
+        puts opts
+        exit
+      end
+    end
+    optparse.parse!
+    optparse
+  end
+
+  def initialize
+    self.difftool = ENV['DIFFTOOL'] || 'diff'
+    self.host1    = ENV['SERVER_A']
+    self.host2    = ENV['SERVER_B']
+  end
+
+  def run
+    opt = parse_options!
+    if self.command || self.compare_file
+      file1, file2 = download
+      exec "#{difftool} #{file1} #{file2}"
+    else
+      puts opt 
+      exit 1
+    end
+  end
+end
+
+if __FILE__ == $0 
+  RemoteCompare.new.run
+end
+
