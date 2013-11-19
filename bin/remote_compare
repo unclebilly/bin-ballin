@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 require 'optparse'
+require 'net/ssh'
+require 'fileutils'
 
 class RemoteCompare
   attr_accessor :difftool, :host1, :host2, :sudo, :command, :compare_file
@@ -21,8 +23,11 @@ class RemoteCompare
     threads = []
     [host1, host2].each do |h|
       threads << Thread.new(h) do |host|
-        `mkdir -p /tmp/#{host}$(dirname #{compare_file})`
-        `ssh -q -tt #{host} "#{sudo} cat #{compare_file}" > /tmp/#{host}#{compare_file}`
+        FileUtils.mkdir_p "/tmp/#{host}#{File.dirname(compare_file)}"
+        output = Net::SSH.start(host, ENV['USER']) do |ssh| 
+          ssh.exec!("#{sudo} cat #{compare_file}")
+        end
+        File.open("/tmp/#{host}#{compare_file}", 'w'){|f| f.puts output}
       end
     end
     threads.map(&:join)
@@ -33,10 +38,16 @@ class RemoteCompare
   # returns an array of file1, file2 to compare
   #
   def download_command_output
-    file1, file2 = [host1, host2].map{|h| File.join("/tmp", "#{h}#{command}".gsub(/\W/,''))}
     threads = []
-    threads << Thread.new{ File.open(file1, 'w'){|f| f.puts `ssh -q -tt #{host1} "#{command}"`} }
-    threads << Thread.new{ File.open(file2, 'w'){|f| f.puts `ssh -q -tt #{host2} "#{command}"`} }
+    file1, file2 = [self.host1, self.host2].map{|h| File.join("/tmp", "#{h}#{command}".gsub(/\W/,''))}
+    [[host1, file1], [host2, file2]].each do |host, file|
+      threads << Thread.new do 
+        output = Net::SSH.start(host, ENV['USER']) do |ssh| 
+          ssh.exec!(command)
+        end
+        File.open(file, 'w'){|f| f.puts output} 
+      end
+    end
     threads.map(&:join)
     [file1, file2]
   end
