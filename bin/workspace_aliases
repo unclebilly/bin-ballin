@@ -1,0 +1,60 @@
+#!/usr/bin/env ruby
+require 'optparse'
+
+##
+# Create an alias file that allows you to CD into any workspace dir
+# with a simple command. The command will always begin with the given 
+# character.  
+#
+class WorkspaceAliases
+  attr_accessor :options, :workspace_dir, :char, :alias_file
+
+  def initialize(argv)
+    self.char       = "_"
+    self.alias_file = File.join(ENV['HOME'], '.workspace_aliases')
+
+    parser = OptionParser.new do |opts|
+      opts.on("-w", "--workspace DIRECTORY", "Your workspace directory") do |dir|
+        raise "#{dir} is not a directory!" unless File.directory?(dir)
+        self.workspace_dir = File.expand_path(dir)
+      end
+      opts.on("-c", "--character CHAR", "Character to prepend to each alias. Defaults to #{char}") do |c|
+        self.char = c
+      end
+      opts.on("-a", "--alias_file FILE", "Full path to workspace alias file.  Defaults to #{alias_file}") do |f|
+        self.alias_file = f
+      end
+    end
+
+    parser.parse(argv)
+    if workspace_dir.nil?
+      puts "You must specifiy your workspace directory."
+      puts parser
+      exit 1
+    end
+  end
+
+  def run
+    dirs  = Dir[File.join(workspace_dir, '*')].find_all{|f| File.directory?(f)}.map{|d| File.basename(d)}
+    count = 0
+    File.open(self.alias_file, 'w') do |f|
+      dirs.each do |d| 
+        count += 1
+        f.puts "alias #{self.char}#{d}='cd #{File.join(self.workspace_dir, d)}'"
+        justletters = d.gsub(/[^a-z0-9]/i,'').downcase
+        unless justletters == d
+          count += 1
+          f.puts "alias #{self.char}#{justletters}='cd #{File.join(self.workspace_dir, d)}'"
+          puts "#{d} => #{justletters}"
+        else
+          puts "#{d}"
+        end
+      end
+    end
+    puts "Wrote #{count} aliases to #{alias_file}"
+  end
+end
+
+if __FILE__ == $0
+  WorkspaceAliases.new(ARGV).run
+end
