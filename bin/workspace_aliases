@@ -7,7 +7,7 @@ require 'optparse'
 # character.  
 #
 class WorkspaceAliases
-  attr_accessor :options, :workspace_dir, :char, :alias_file
+  attr_accessor :options, :workspace_dir, :char, :alias_file, :verbose
 
   def initialize(argv)
     self.char       = "_"
@@ -24,6 +24,9 @@ class WorkspaceAliases
       opts.on("-a", "--alias_file FILE", "Full path to workspace alias file.  Defaults to #{alias_file}") do |f|
         self.alias_file = f
       end
+      opts.on("-v", "--verbose", "Enable verbose output") do |v|
+        self.verbose = true
+      end
     end
 
     parser.parse(argv)
@@ -35,23 +38,25 @@ class WorkspaceAliases
   end
 
   def run
-    dirs  = Dir[File.join(workspace_dir, '*')].find_all{|f| File.directory?(f)}.map{|d| File.basename(d)}
     count = 0
     File.open(self.alias_file, 'w') do |f|
-      dirs.each do |d| 
+      dirnames.each do |d| 
         count += 1
-        f.puts "alias #{self.char}#{d}='cd #{File.join(self.workspace_dir, d)}'"
-        justletters = d.gsub(/[^a-z0-9]/i,'').downcase
-        unless justletters == d
-          count += 1
-          f.puts "alias #{self.char}#{justletters}='cd #{File.join(self.workspace_dir, d)}'"
-          puts "#{d} => #{justletters}"
-        else
-          puts "#{d}"
-        end
+        alias_line = project_to_alias(d)
+        f.puts alias_line
+        puts alias_line if verbose
       end
     end
     puts "Wrote #{count} aliases to #{alias_file}"
+  end
+
+  def project_to_alias(dirname)
+    dir_alias = self.char + dirname.gsub(/[^a-z0-9]/i,'').downcase
+    "alias #{dir_alias}='cd #{File.join(self.workspace_dir, dirname)}'"
+  end
+
+  def dirnames
+    Dir[File.join(workspace_dir, '*')].find_all{|f| File.directory?(f)}.map{|d| File.basename(d)}
   end
 end
 
