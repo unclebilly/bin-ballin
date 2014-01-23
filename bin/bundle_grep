@@ -1,0 +1,7 @@
+#!/bin/bash
+agpath=`which ag`
+if [ ! $agpath ]; then
+  echo 'You must install ag: brew install the_silver_searcher'
+  exit 1
+fi
+ag "$@" `bundle show --paths`
