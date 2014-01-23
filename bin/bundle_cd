@@ -1,0 +1,3 @@
+#!/bin/bash
+newdir=`bundle show $@`
+osascript -e 'tell application "iTerm"' -e 'activate' -e 'set myterm to (make new terminal)' -e 'tell myterm' -e 'launch session "Default Session"' -e 'set new_tab_tty to the tty of the last session' -e 'tell session id new_tab_tty' -e 'write text "cd '"$newdir"'"' -e 'end tell' -e 'end tell' -e 'end tell'
