@@ -51,12 +51,21 @@ class WorkspaceAliases
   end
 
   def project_to_alias(dirname)
-    dir_alias = self.char + dirname.gsub(/[^a-z0-9]/i,'').downcase
-    "alias #{dir_alias}='cd #{File.join(self.workspace_dir, dirname)}'"
+    dir_alias = self.char + File.basename(dirname).gsub(/[^a-z0-9]/i,'').downcase
+    "alias #{dir_alias}='cd #{dirname}'"
   end
 
   def dirnames
-    Dir[File.join(workspace_dir, '*')].find_all{|f| File.directory?(f)}.map{|d| File.basename(d)}
+    dirs = Dir[File.join(workspace_dir, '/*/')]
+    sub_dirs = []
+
+    dirs.each do |dir|
+      moar = Dir[File.join(dir, '/*/')].find_all{|d| File.exists?(File.join(d, '/.git/')) }
+      sub_dirs.concat(moar)
+    end
+
+    dirs.concat(sub_dirs)
+    dirs.map{|d| File.expand_path(d)}
   end
 end
 
